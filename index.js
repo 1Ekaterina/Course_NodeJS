@@ -1,22 +1,49 @@
-console.log('Record 1');
+const fs = require("fs")
+const path = require("path")
+const {EOL} = require("os")
 
-setTimeout(() => {
-  console.log('Record 2');
-  Promise.resolve().then(() => {
-    setTimeout(() => {
-    сonsole.log('Record 3');
-    Promise.resolve().then(() => {
-      console.log('Record 4');
-      });       
-    });
-  });       
+const fileEnding = '_requests.log';
+
+const ipAddresses = ['89.123.1.41', '34.48.240.111'];
+
+const logFiles = ipAddresses.map(string => string.replace(/\./g, "-") + fileEnding);
+
+const writeStreams = [];
+
+let rest = '';
+
+const readStream = new fs.ReadStream(path.join(__dirname, './access.log'), 'utf8');
+
+logFiles.forEach((logFile) => {
+    writeStreams.push(fs.createWriteStream(path.join(__dirname, `./${logFile}`), {flags: 'as+', encoding: 'utf8'}))
+})
+
+const chunkToArray = (chunk) => {
+    return chunk.split("\n").filter(item => item ? true : false)
+}
+
+const sortAndWriteLog = (logString) => {
+    ipAddresses.forEach((ipAddress, index) => {
+        if (logString.includes(ipAddress)) {
+            writeStreams[index].write(`${logString}${EOL}`);
+        }
+    })
+}
+
+readStream.on('data', (chunk) => {
+    chunk = rest + chunk;
+    let chunkArray = chunkToArray(chunk)
+    rest = chunkArray.pop();
+    chunkArray.forEach(logString => sortAndWriteLog(logString))
 });
 
-console.log('Record 5');
+readStream.on('end', () => {
+    if (rest) {
+        sortAndWriteLog(rest);
+        rest = EOL;
+    }
 
-Promise.resolve().then(() => Promise.resolve().then(() => console.log('Record 6')));
-
-//Record 1
-//Record 5
-//Record 6
-//Record 2
+    logFiles.forEach((logFile, index) => {
+        writeStreams[index].end(() => console.log(`File ${logFile} writing finished`))
+    })
+});
