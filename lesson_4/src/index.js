@@ -1,48 +1,37 @@
-#!/usr/bin/env node
-
+const express = require('express');
 const path = require('path');
-const {getFileNamesInDirectory, promptUser, showFileContents, isFile} = require('./utils');
-const yargs = require('yargs');
+const {getFileNamesInDirectory, listFolders, showFileContents, isFile} = require('./utils');
 
-const options = yargs
-    .usage("Usage: -p path")
-    .option(
-        "p",
-        {
-            alias: "path",
-            describe: "Path to file",
-            type: "string",
-            demandOption: false,
-        })
-    .option(
-        "P",
-        {
-            alias: "pattern",
-            desctibe: "Search pattern",
-            type: "string",
-            demandOption: false,
-        }
-    )
-    .argv;
+const app = express();
 
-let CWD = options.path ? options.path : process.cwd();
+let CWD = process.cwd();
 
-if (process.argv[2]){
-    if (process.argv[2][0] !== '-') {
-        CWD = path.join(process.cwd(), process.argv[2]);
-    }
-}
-
-const pattern = options.pattern || "";
-
-const viewFolder = async (folder) => {
-    const filesInCwd = await getFileNamesInDirectory(folder);
-    const userInput = await promptUser(filesInCwd);
-    if (isFile(path.join(folder, userInput))) {
-        await showFileContents(path.join(folder, userInput), pattern);
+const viewFolder =(folder) => {
+    if (isFile(path.join(folder))) {
+        //показать файл
+        return showFileContents(path.join(folder));
     } else {
-        viewFolder(path.join(folder, userInput));
+        //зайти в папку и показать файлы
+        const filesInCwd = getFileNamesInDirectory(path.join(folder));
+        return listFolders(filesInCwd, folder);
     }
 };
 
-viewFolder(CWD);
+app.get('/',
+    (
+        request,
+        response,
+    ) => {
+        let {folder} = request.query;
+
+        if (!folder) {
+            folder = CWD;
+        }
+
+        response.send(`view ${folder} directory <br><br> ${viewFolder(folder)}`);
+    });
+
+app.listen(3000, 'localhost', () => {
+    console.log('Server listen http://localhost:3000');
+    console.log('Current directory', CWD);
+})
