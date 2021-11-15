@@ -1,48 +1,70 @@
-#!/usr/bin/env node
+const io = require('socket.io')
+const app = require('./app');
 
-const path = require('path');
-const {getFileNamesInDirectory, promptUser, showFileContents, isFile} = require('./utils');
-const yargs = require('yargs');
+const socketServer = io(app);
 
-const options = yargs
-    .usage("Usage: -p path")
-    .option(
-        "p",
-        {
-            alias: "path",
-            describe: "Path to file",
-            type: "string",
-            demandOption: false,
-        })
-    .option(
-        "P",
-        {
-            alias: "pattern",
-            desctibe: "Search pattern",
-            type: "string",
-            demandOption: false,
-        }
-    )
-    .argv;
+let connectionCount = 0;
 
-let CWD = options.path ? options.path : process.cwd();
+const userList = [];
+const connectList = [];
 
-if (process.argv[2]){
-    if (process.argv[2][0] !== '-') {
-        CWD = path.join(process.cwd(), process.argv[2]);
-    }
+const info = (socket) => {
+    connectionCount = socketServer.engine.clientsCount;
+    console.log('Connection', connectionCount);
+    socket.broadcast.emit('CHANGE_COUNT', {count: connectionCount});
+    socket.emit('CHANGE_COUNT', {count: connectionCount});
 }
 
-const pattern = options.pattern || "";
+socketServer.on('connection', function (socket) {
+    console.log('Connection', socket.id);
+    connectList[socket.id] = '';
 
-const viewFolder = async (folder) => {
-    const filesInCwd = await getFileNamesInDirectory(folder);
-    const userInput = await promptUser(filesInCwd);
-    if (isFile(path.join(folder, userInput))) {
-        await showFileContents(path.join(folder, userInput), pattern);
-    } else {
-        viewFolder(path.join(folder, userInput));
-    }
-};
+    info(socket);
 
-viewFolder(CWD);
+    socket.on('disconnect', function () {
+        socket.broadcast.emit('SERVER_MSG', {username: 'Server', text: `Пользователь ${connectList[socket.id]} отключился`});
+        console.log(`Пользователь ${connectList[socket.id]} отключился`);
+        info(socket);
+    });
+
+    socket.on('CLIENT_CONNECT', (data) => {
+        console.log('Connection', data);
+        connectList[socket.id] = data.username;
+
+        if (userList.includes(data.username)){
+            socket.broadcast.emit('SERVER_MSG', {
+                username: 'Server',
+                text: `Пользователь ${data.username} переподключился к чату`
+            });
+        }else{
+            userList.push(data.username);
+            socket.broadcast.emit('SERVER_MSG', {
+                username: 'Server',
+                text: `Пользователь ${data.username} подключился к чату`
+            });
+            socket.emit('SERVER_MSG', {username: 'Server', text: `Пользователь ${data.username} подключился к чату`});
+        }
+    });
+
+    socket.on('CHANGE_NAME', (data)=>{
+        const nameBefore = connectList[socket.id];
+        const nameAfter = data.username;
+
+        socket.broadcast.emit('SERVER_MSG', {username: 'Server', text: `Пользователь ${nameBefore} поменял имя на ${nameAfter}`});
+        socket.emit('SERVER_MSG', {username: 'Server', text: `Пользователь ${nameBefore} поменял имя на ${nameAfter}`});
+
+        connectList[socket.id] = nameAfter;
+        userList.splice( userList.indexOf(nameBefore),1);
+        userList.push(data.username);
+    });
+
+    socket.on('CLIENT_MSG', (data) => {
+        socket.broadcast.emit('SERVER_MSG', {username: data.username, text: data.text});
+        socket.emit('SERVER_MSG', {username: data.username, text: data.text});
+    });
+
+});
+
+app.listen(3030, () => {
+    console.log('Server started on port 3030');
+});

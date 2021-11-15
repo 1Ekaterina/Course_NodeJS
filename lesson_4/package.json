@@ -4,13 +4,15 @@
   "description": "cli program",
   "main": "index.js",
   "scripts": {
-    "start": "node src/index.js"
+    "dev": "nodemon src/index.js --watch ./src"
   },
-  "dependencies": {
-    "inquirer": "^8.2.0",
-    "yargs": "^17.2.1",
-    "colors": "^1.4.0"
+  "devDependencies": {
+    "nodemon": "^2.0.14"
   },
+  "keywords": [],
   "author": "andy",
-  "license": "ISC"
+  "license": "ISC",
+  "dependencies": {
+    "socket.io": "^4.3.2"
+  }
 }
